@@ -19,7 +19,7 @@ export interface Message {
   sender_username: string;
   content: string;
   timestamp: string;
-  message_type: 'text' | 'system';
+  message_type: 'text' | 'system' | 'file';
 }
 
 export interface ChatRoom {
@@ -34,7 +34,18 @@ export interface SendMessageRequest {
   room_name: string;
   sender_id: string;
   content: string;
-  message_type: 'text' | 'system';
+  message_type: 'text' | 'system' | 'file';
+}
+
+export interface RoomsResponse {
+  rooms: ChatRoom[];
+  _links?: any;
+}
+
+export interface MessagesResponse {
+  messages: Message[];
+  room?: string;
+  _links?: any;
 }
 
 export interface LoginRequest {
@@ -56,7 +67,7 @@ export class ChatService {
   private apiUrl = 'http://localhost:8000';
   private messagesSubject = new BehaviorSubject<Message[]>([]);
   public messages$ = this.messagesSubject.asObservable();
-  
+
   private currentUserSubject = new BehaviorSubject<User | null>(null);
   public currentUser$ = this.currentUserSubject.asObservable();
 
@@ -89,12 +100,12 @@ export class ChatService {
     return this.currentUserSubject.value;
   }
 
-  getRooms(): Observable<ChatRoom[]> {
-    return this.http.get<ChatRoom[]>(`${this.apiUrl}/api/rooms/`);
+  getRooms(): Observable<RoomsResponse> {
+    return this.http.get<RoomsResponse>(`${this.apiUrl}/api/rooms/`);
   }
 
-  getMessages(roomName: string): Observable<Message[]> {
-    return this.http.get<Message[]>(`${this.apiUrl}/api/messages/${roomName}/`);
+  getMessages(roomName: string): Observable<MessagesResponse> {
+    return this.http.get<MessagesResponse>(`${this.apiUrl}/api/messages/${roomName}/`);
   }
 
   sendMessage(request: SendMessageRequest): Observable<any> {
@@ -125,4 +136,4 @@ export class ChatService {
   getRabbitMQStatus(): Observable<any> {
     return this.http.get(`${this.apiUrl}/api/rabbitmq/status/`);
   }
-} 
+}

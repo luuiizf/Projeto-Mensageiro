@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ChatRoom, Message, RabbitMQConnection, User
+from .models import ChatRoom, Message, RabbitMQConnection, User, Notification
 import hashlib
 
 class UserSerializer(serializers.ModelSerializer):
@@ -83,3 +83,16 @@ class RabbitMQConnectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = RabbitMQConnection
         fields = '__all__' 
+
+class NotificationSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    room_name = serializers.CharField(source='room.name', read_only=True)
+    
+    class Meta:
+        model = Notification
+        fields = [
+            'id', 'user', 'user_username', 'room', 'room_name',
+            'notification_type', 'title', 'message', 'priority',
+            'is_read', 'created_at', 'data'
+        ]
+        read_only_fields = ['id', 'created_at']

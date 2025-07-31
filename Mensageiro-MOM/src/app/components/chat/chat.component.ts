@@ -1,14 +1,16 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { ChatService, Message, ChatRoom, SendMessageRequest, User } from '../../services/chat.service';
-import { KongStatusComponent } from '../kong-status/kong-status.component';
-import { Subscription, interval } from 'rxjs';
+import { Component, type OnInit, type OnDestroy } from "@angular/core"
+import { CommonModule } from "@angular/common"
+import { FormsModule } from "@angular/forms"
+import { ChatService, type Message, type ChatRoom, type SendMessageRequest, type User, type RoomsResponse, type MessagesResponse } from "../../services/chat.service"
+import { KongStatusComponent } from "../kong-status/kong-status.component"
+import { FileManagerComponent } from "../file-manager/file-manager.component"
+import { NotificationsComponent } from "../notifications/notifications.component"
+import { Subscription, interval } from "rxjs"
 
 @Component({
-  selector: 'app-chat',
+  selector: "app-chat",
   standalone: true,
-  imports: [CommonModule, FormsModule, KongStatusComponent],
+  imports: [CommonModule, FormsModule, KongStatusComponent, FileManagerComponent, NotificationsComponent],
   template: `
     <div class="chat-container">
       <div class="chat-header">
@@ -73,12 +75,20 @@ import { Subscription, interval } from 'rxjs';
               <span class="room-hash">#</span>
               <span>{{ currentRoom.name }}</span>
             </div>
+            <div class="room-actions">
+              <button (click)="toggleFileManager()"
+                      [class.active]="showFileManager"
+                      class="toggle-btn">
+                <span>📁</span>
+              </button>
+            </div>
           </div>
 
           <div class="chat-messages" #messagesContainer>
             <div class="message-bubble"
                  *ngFor="let message of messages"
                  [class.system]="message.message_type === 'system'"
+                 [class.file]="message.message_type === 'file'"
                  [class.own]="message.sender_username === currentUser?.username">
               <div class="message-avatar" *ngIf="message.sender_username !== currentUser?.username && message.message_type !== 'system'">
                 {{ (message.sender_username || 'U').charAt(0).toUpperCase() }}
@@ -108,6 +118,15 @@ import { Subscription, interval } from 'rxjs';
               </button>
             </div>
           </div>
+
+          <!-- File Manager Panel -->
+          <div class="file-panel" *ngIf="showFileManager">
+            <app-file-manager [currentRoom]="currentRoom"></app-file-manager>
+          </div>
+        </div>
+
+        <div class="notifications-sidebar">
+          <app-notifications></app-notifications>
         </div>
 
         <div class="no-room-selected" *ngIf="!currentRoom">
@@ -115,12 +134,31 @@ import { Subscription, interval } from 'rxjs';
             <div class="empty-icon">💬</div>
             <h3>Bem-vindo ao Mensageiro MOM!</h3>
             <p>Selecione uma sala para começar a conversar ou crie uma nova sala.</p>
+            <div class="features-list">
+              <div class="feature-item">
+                <span class="feature-icon">💬</span>
+                <span>Chat em tempo real</span>
+              </div>
+              <div class="feature-item">
+                <span class="feature-icon">📁</span>
+                <span>Compartilhamento de arquivos</span>
+              </div>
+              <div class="feature-item">
+                <span class="feature-icon">🔔</span>
+                <span>Notificações inteligentes</span>
+              </div>
+              <div class="feature-item">
+                <span class="feature-icon">⚡</span>
+                <span>API Gateway Kong</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     * {
       box-sizing: border-box;
     }
@@ -413,6 +451,7 @@ import { Subscription, interval } from 'rxjs';
       display: flex;
       flex-direction: column;
       background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
+      position: relative;
     }
 
     .chat-room-header {
@@ -420,6 +459,9 @@ import { Subscription, interval } from 'rxjs';
       background: white;
       border-bottom: 1px solid #E5E7EB;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     .room-title {
@@ -434,6 +476,32 @@ import { Subscription, interval } from 'rxjs';
     .room-hash {
       color: #8B5CF6;
       font-size: 1.3rem;
+    }
+
+    .room-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .toggle-btn {
+      width: 40px;
+      height: 40px;
+      background: #F3F4F6;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-btn:hover, .toggle-btn.active {
+      background: linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%);
+      color: white;
+      border-color: #8B5CF6;
+      transform: scale(1.05);
     }
 
     .chat-messages {
@@ -459,6 +527,11 @@ import { Subscription, interval } from 'rxjs';
     .message-bubble.system {
       align-self: center;
       max-width: 60%;
+    }
+
+    .message-bubble.file .message-content {
+      background: linear-gradient(135deg, #F59E0B 0%, #EAB308 100%) !important;
+      color: white !important;
     }
 
     .message-avatar {
@@ -592,6 +665,26 @@ import { Subscription, interval } from 'rxjs';
       transform: none;
     }
 
+    .file-panel {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 400px;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-left: 1px solid #E5E7EB;
+      z-index: 10;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+
+    .notifications-sidebar {
+      width: 350px;
+      background: linear-gradient(180deg, #374151 0%, #1F2937 100%);
+      border-left: 1px solid rgba(139, 92, 246, 0.2);
+    }
+
     .no-room-selected {
       flex: 1;
       display: flex;
@@ -602,7 +695,7 @@ import { Subscription, interval } from 'rxjs';
 
     .empty-state {
       text-align: center;
-      max-width: 400px;
+      max-width: 500px;
       padding: 2rem;
     }
 
@@ -621,168 +714,207 @@ import { Subscription, interval } from 'rxjs';
 
     .empty-state p {
       color: #6B7280;
-      margin: 0;
+      margin: 0 0 2rem 0;
       line-height: 1.5;
     }
 
+    .features-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    .feature-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2);
+    }
+
+    .feature-icon {
+      font-size: 1.5rem;
+    }
+
+    .feature-item span:last-child {
+      color: #1F2937;
+      font-weight: 500;
+      font-size: 0.875rem;
+    }
+
     /* Scrollbar customization */
-    .chat-messages::-webkit-scrollbar {
+    .chat-messages::-webkit-scrollbar, .file-panel::-webkit-scrollbar {
       width: 6px;
     }
 
-    .chat-messages::-webkit-scrollbar-track {
+    .chat-messages::-webkit-scrollbar-track, .file-panel::-webkit-scrollbar-track {
       background: transparent;
     }
 
-    .chat-messages::-webkit-scrollbar-thumb {
+    .chat-messages::-webkit-scrollbar-thumb, .file-panel::-webkit-scrollbar-thumb {
       background: rgba(139, 92, 246, 0.3);
       border-radius: 3px;
     }
 
-    .chat-messages::-webkit-scrollbar-thumb:hover {
+    .chat-messages::-webkit-scrollbar-thumb:hover, .file-panel::-webkit-scrollbar-thumb:hover {
       background: rgba(139, 92, 246, 0.5);
     }
-  `]
+  `,
+  ],
 })
 export class ChatComponent implements OnInit, OnDestroy {
-  rooms: ChatRoom[] = [];
-  currentRoom: ChatRoom | null = null;
-  messages: Message[] = [];
-  newMessage: string = '';
-  newRoomName: string = '';
-  connectionStatus: 'connected' | 'disconnected' = 'disconnected';
-  connectionStatusText: string = 'Desconectado';
-  currentUser: User | null = null;
+  rooms: ChatRoom[] = []
+  currentRoom: ChatRoom | null = null
+  messages: Message[] = []
+  newMessage = ""
+  newRoomName = ""
+  connectionStatus: "connected" | "disconnected" = "disconnected"
+  connectionStatusText = "Desconectado"
+  currentUser: User | null = null
+  showFileManager = false
 
-  private subscription = new Subscription();
-  private pollInterval = interval(2000);
+  private subscription = new Subscription()
+  private pollInterval = interval(2000)
 
   constructor(private chatService: ChatService) {}
 
   ngOnInit(): void {
-    this.currentUser = this.chatService.getCurrentUser();
-    this.loadRooms();
-    this.checkConnection();
-    this.startPolling();
+    this.currentUser = this.chatService.getCurrentUser()
+    this.loadRooms()
+    this.checkConnection()
+    this.startPolling()
   }
 
   ngOnDestroy(): void {
-    this.subscription.unsubscribe();
+    this.subscription.unsubscribe()
   }
 
   logout(): void {
-    this.chatService.logout();
+    this.chatService.logout()
   }
 
   loadRooms(): void {
     this.subscription.add(
       this.chatService.getRooms().subscribe({
-        next: (rooms) => {
-          this.rooms = rooms;
+        next: (response: RoomsResponse) => {
+          this.rooms = response.rooms || []
         },
         error: (error) => {
-          console.error('Erro ao carregar salas:', error);
-        }
-      })
-    );
+          console.error("Erro ao carregar salas:", error)
+        },
+      }),
+    )
   }
 
   selectRoom(room: ChatRoom): void {
-    this.currentRoom = room;
-    this.loadMessages(room.name);
+    this.currentRoom = room
+    this.loadMessages(room.name)
   }
 
   loadMessages(roomName: string): void {
     this.subscription.add(
       this.chatService.getMessages(roomName).subscribe({
-        next: (messages) => {
-          this.messages = messages;
-          this.scrollToBottom();
+        next: (response: MessagesResponse) => {
+          this.messages = response.messages || []
+          this.scrollToBottom()
         },
         error: (error) => {
-          console.error('Erro ao carregar mensagens:', error);
-        }
-      })
-    );
+          console.error("Erro ao carregar mensagens:", error)
+        },
+      }),
+    )
   }
 
   createRoom(): void {
-    if (!this.newRoomName.trim()) return;
+    if (!this.newRoomName.trim()) return
 
     this.subscription.add(
       this.chatService.createRoom(this.newRoomName).subscribe({
         next: (room) => {
-          this.rooms.push(room);
-          this.newRoomName = '';
-          this.selectRoom(room);
+          this.rooms.push(room)
+          this.newRoomName = ""
+          this.selectRoom(room)
         },
         error: (error) => {
-          console.error('Erro ao criar sala:', error);
-        }
-      })
-    );
+          console.error("Erro ao criar sala:", error)
+        },
+      }),
+    )
   }
 
   sendMessage(): void {
-    if (!this.newMessage.trim() || !this.currentRoom || !this.currentUser) return;
+    if (!this.newMessage.trim() || !this.currentRoom || !this.currentUser) return
 
     const request: SendMessageRequest = {
       room_name: this.currentRoom.name,
       sender_id: this.currentUser.id,
       content: this.newMessage,
-      message_type: 'text'
-    };
+      message_type: "text",
+    }
 
     this.subscription.add(
       this.chatService.sendMessage(request).subscribe({
         next: (response) => {
-          this.newMessage = '';
-          this.loadMessages(this.currentRoom!.name);
+          this.newMessage = ""
+          this.loadMessages(this.currentRoom!.name)
         },
         error: (error) => {
-          console.error('Erro ao enviar mensagem:', error);
-        }
-      })
-    );
+          console.error("Erro ao enviar mensagem:", error)
+        },
+      }),
+    )
+  }
+
+  toggleFileManager(): void {
+    this.showFileManager = !this.showFileManager
   }
 
   checkConnection(): void {
     this.subscription.add(
       this.chatService.getRabbitMQStatus().subscribe({
         next: (response) => {
-          this.connectionStatus = response.status === 'connected' ? 'connected' : 'disconnected';
-          this.connectionStatusText = response.status === 'connected' ? 'Conectado' : 'Desconectado';
+          this.connectionStatus = response.status === "connected" ? "connected" : "disconnected"
+          this.connectionStatusText = response.status === "connected" ? "Conectado" : "Desconectado"
         },
         error: (error) => {
-          this.connectionStatus = 'disconnected';
-          this.connectionStatusText = 'Erro de Conexão';
-          console.error('Erro ao verificar conexão:', error);
-        }
-      })
-    );
+          this.connectionStatus = "disconnected"
+          this.connectionStatusText = "Erro de Conexão"
+          console.error("Erro ao verificar conexão:", error)
+        },
+      }),
+    )
   }
 
   startPolling(): void {
     this.subscription.add(
       this.pollInterval.subscribe(() => {
         if (this.currentRoom) {
-          this.loadMessages(this.currentRoom.name);
+          this.loadMessages(this.currentRoom.name)
         }
-        this.checkConnection();
-      })
-    );
+        this.checkConnection()
+      }),
+    )
   }
 
   formatTimestamp(timestamp: string): string {
-    return new Date(timestamp).toLocaleTimeString('pt-BR');
+    return new Date(timestamp).toLocaleTimeString("pt-BR")
   }
 
   private scrollToBottom(): void {
     setTimeout(() => {
-      const messagesContainer = document.querySelector('.chat-messages');
+      const messagesContainer = document.querySelector(".chat-messages")
       if (messagesContainer) {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight
       }
-    }, 100);
+    }, 100)
   }
 }

@@ -1,138 +1,290 @@
-# Mensageiro-MOM
-Sistema de chat utilizando RabbitMQ como Message-Oriented Middleware (MOM) e Kong como API Gateway
+# 🚀 Sistema Mensageiro - Arquitetura Completa REST/SOAP
 
-## Arquitetura
+Sistema completo de mensagens que integra **REST**, **SOAP**, **API Gateway** e **Message-Oriented Middleware (MOM)** em uma arquitetura robusta e escalável.
 
-Este projeto implementa um sistema de chat distribuído com os seguintes componentes:
+## 📋 Funcionalidades
 
-- **Frontend**: Angular (Interface de chat)
-- **API Gateway**: Kong (Gerenciamento de rotas e proxy)
-- **Backend**: Django REST Framework (API Gateway)
-- **Message Broker**: RabbitMQ (MOM)
+### ✅ Atividade 1 - MOM (Message-Oriented Middleware)
+- ✅ **Processos Publicadores/Produtores**: Backend Django publica mensagens
+- ✅ **Processos Assinantes/Consumidores**: RabbitMQ processa mensagens
+- ✅ **RabbitMQ**: Message broker para comunicação assíncrona
+- ✅ **API Gateway**: Kong para roteamento e controle
+- ✅ **Cliente Web**: Interface Angular para interação
 
-## Funcionalidades
+### ✅ Atividade 2 - Integração REST/SOAP + API Gateway
+- ✅ **API Gateway**: Kong com roteamento para REST e SOAP
+- ✅ **HATEOAS**: Implementado em todas as respostas REST
+- ✅ **Documentação Swagger**: API totalmente documentada
+- ✅ **2+ APIs**: REST (chat/notificações) + SOAP (arquivos)
+- ✅ **Cliente Web**: Angular consumindo REST via Gateway
+- ✅ **Servidor SOAP**: Python/Spyne com WSDL completo
+- ✅ **Cliente SOAP**: Node.js em linguagem diferente do servidor
+- ✅ **WSDL**: Arquivo gerado automaticamente com todas as tags
 
-- ✅ Publicação/Produção de mensagens
-- ✅ Assinatura/Consumo de mensagens
-- ✅ Interface de chat em tempo real
-- ✅ Gerenciamento de tópicos/filas
-- ✅ API Gateway com Kong
-- ✅ Teste fácil com execução local
+## 🏗️ Arquitetura
 
-## Estrutura do Projeto
+\`\`\`
+┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
+│   Frontend      │    │     Kong     │    │   Backend       │
+│   Angular       │◄──►│   Gateway    │◄──►│   Django REST   │
+│   (Port 4200)   │    │  (Port 8001) │    │   (Port 8000)   │
+└─────────────────┘    └──────────────┘    └─────────────────┘
+                              │                       │
+                              │                       ▼
+                              │              ┌─────────────────┐
+                              │              │    RabbitMQ     │
+                              │              │   (Port 5672)   │
+                              │              └─────────────────┘
+                              │
+                              ▼
+                       ┌─────────────────┐
+                       │  SOAP Service   │
+                       │ Python/Spyne    │
+                       │  (Port 8001)    │
+                       └─────────────────┘
+                              ▲
+                              │
+                       ┌─────────────────┐
+                       │  SOAP Client    │
+                       │    Node.js      │
+                       └─────────────────┘
+\`\`\`
 
-```
-Mensageiro-MOM/
-├── mensageiroBackend/     # API Django REST Framework
-│   ├── backend/           # App Django principal
-│   ├── mensageiroBackend/ # Configurações Django
-│   ├── requirements.txt   # Dependências Python
-│   └── run_backend.bat   # Script de execução
-├── Mensageiro-MOM/        # Aplicação Angular
-│   ├── src/app/          # Componentes Angular
-│   ├── package.json      # Dependências Node.js
-│   └── run_frontend.bat  # Script de execução
-├── kong/                  # Configurações Kong
-│   ├── kong.yml          # Configuração Kong
-│   └── run_kong.bat      # Script Kong
-├── run_project.bat       # Script principal
-└── README.md
-```
+## 🛠️ Tecnologias
 
-## Pré-requisitos
+### Backend
+- **Django REST Framework**: API REST principal
+- **Spyne**: Servidor SOAP para upload de arquivos
+- **RabbitMQ**: Message broker (MOM)
+- **SQLite**: Banco de dados
+- **Kong**: API Gateway
 
-- Python 3.8+
-- Node.js 18+
-- RabbitMQ Server
-- Kong Gateway
+### Frontend
+- **Angular**: Cliente web principal
+- **Node.js**: Cliente SOAP independente
 
-## Instalação dos Serviços
+### Integrações
+- **HATEOAS**: Links hipermídia em todas as respostas
+- **Swagger**: Documentação automática da API
+- **CORS**: Configurado para integração cross-origin
 
-### RabbitMQ
-```bash
-# Windows (via winget)
-winget install RabbitMQ.RabbitMQ
+## 🚀 Como Executar
 
-# Ou baixe de: https://www.rabbitmq.com/download.html
-```
-
-### Kong Gateway
-```bash
-# Windows (via Chocolatey)
-choco install kong
-
-# Ou baixe de: https://konghq.com/install/
-```
-
-## Execução Rápida
-
-### Opção 1: Script Automático
-```bash
-# Execute o script principal
-run_project.bat
-```
+### Opção 1: Execução Automática (Recomendada)
+\`\`\`bash
+# Execute todos os serviços de uma vez
+run_all_services.bat
+\`\`\`
 
 ### Opção 2: Execução Manual
 
-#### 1. Configurar Kong
-```bash
-cd kong
-kong start
-```
+#### 1. RabbitMQ
+\`\`\`bash
+# Instalar e iniciar RabbitMQ
+rabbitmq-server
+\`\`\`
 
-#### 2. Configurar Backend
-```bash
+#### 2. Backend Django
+\`\`\`bash
 cd mensageiroBackend
-python -m venv venv
-venv\Scripts\activate  # Windows
 pip install -r requirements.txt
-python manage.py makemigrations
 python manage.py migrate
-python manage.py runserver
-```
+python manage.py runserver 8000
+\`\`\`
 
-#### 3. Configurar Frontend
-```bash
+#### 3. Servidor SOAP
+\`\`\`bash
+cd mensageiroBackend
+python soap_service/server.py
+\`\`\`
+
+#### 4. Kong Gateway
+\`\`\`bash
+cd kong
+kong start -c kong.conf
+\`\`\`
+
+#### 5. Frontend Angular
+\`\`\`bash
 cd Mensageiro-MOM
 npm install
 ng serve
-```
+\`\`\`
 
-#### 4. Acessar Aplicação
-- Chat: http://localhost:4200
-- API via Kong: http://localhost:8001
-- Kong Admin: http://localhost:8001
-- RabbitMQ Management: http://localhost:15672
+#### 6. Cliente SOAP (Opcional)
+\`\`\`bash
+cd soap_client
+npm install
+node client.js
+\`\`\`
 
-## Como Usar
+## 🌐 Endpoints e Serviços
 
-1. **Acesse o chat**: http://localhost:4200
-2. **Digite seu nome**: No campo "Seu nome"
-3. **Crie uma sala**: Digite o nome da sala e clique "Criar Sala"
-4. **Selecione uma sala**: Clique em uma sala da lista
-5. **Envie mensagens**: Digite sua mensagem e pressione Enter
+### REST API (via Kong Gateway)
+- **API Root**: `http://localhost:8001/api/`
+- **Documentação**: `http://localhost:8001/swagger/`
+- **Usuários**: `http://localhost:8001/api/users/`
+- **Salas**: `http://localhost:8001/api/rooms/`
+- **Mensagens**: `http://localhost:8001/api/messages/`
+- **Notificações**: `http://localhost:8001/api/notifications/`
 
-## API Endpoints (via Kong)
+### SOAP Service
+- **WSDL**: `http://localhost:8001?wsdl`
+- **Operações**:
+  - `upload_file`: Upload de arquivos
+  - `download_file`: Download de arquivos
+  - `list_files`: Listar arquivos por sala
 
-### Salas
-- `GET /api/rooms/` - Listar salas
-- `POST /api/rooms/` - Criar sala
-- `GET /api/rooms/{id}/messages/` - Mensagens da sala
+### Frontend
+- **Angular App**: `http://localhost:4200`
 
-### Mensagens
-- `GET /api/messages/` - Listar mensagens
-- `POST /api/send-message/` - Enviar mensagem
-- `GET /api/messages/{room_name}/` - Mensagens por sala
+### Monitoramento
+- **RabbitMQ Management**: `http://localhost:15672` (guest/guest)
+
+## 📖 HATEOAS - Hypermedia as the Engine of Application State
+
+Todas as respostas da API REST incluem links hipermídia no campo `_links`:
+
+\`\`\`json
+{
+  "id": "123",
+  "username": "usuario",
+  "_links": {
+    "self": {
+      "href": "/api/users/123/",
+      "method": "GET"
+    },
+    "update": {
+      "href": "/api/users/123/",
+      "method": "PUT"
+    },
+    "messages": {
+      "href": "/api/messages/?sender=123",
+      "method": "GET"
+    }
+  }
+}
+\`\`\`
+
+## 📄 WSDL - Web Services Description Language
+
+O arquivo WSDL é gerado automaticamente e contém:
+
+### Principais Tags:
+- `<definitions>`: Namespace e importações
+- `<types>`: Tipos de dados complexos
+- `<message>`: Mensagens de entrada/saída
+- `<portType>`: Operações disponíveis
+- `<binding>`: Protocolo de transmissão
+- `<service>`: Endpoints do serviço
+
+### Como o Cliente Node.js Utiliza o WSDL:
+1. **Requisição GET** para obter o WSDL
+2. **Parse XML** para extrair operações e tipos
+3. **Criação de métodos** JavaScript para cada operação
+4. **Serialização** de parâmetros para XML SOAP
+5. **Envio POST** com envelope SOAP
+6. **Deserialização** da resposta XML
+
+## 🧪 Testes
+
+### Testar Cliente SOAP
+\`\`\`bash
+cd soap_client
+node test_client.js
+\`\`\`
+
+### Testar API REST
+\`\`\`bash
+# Via Swagger UI
+http://localhost:8001/swagger/
+
+# Via curl
+curl -X GET http://localhost:8001/api/
+\`\`\`
+
+## 📁 Estrutura do Projeto
+
+\`\`\`
+ProjetoMensageiro/
+├── Mensageiro-MOM/          # Frontend Angular
+├── mensageiroBackend/       # Backend Django
+│   ├── backend/            # App principal REST
+│   ├── notifications_api/  # API de notificações
+│   └── soap_service/       # Servidor SOAP
+├── soap_client/            # Cliente SOAP Node.js
+├── kong/                   # Configuração Kong
+└── run_all_services.bat    # Script de inicialização
+\`\`\`
+
+## 🔧 Configurações
+
+### Kong Gateway
+- **Rate Limiting**: 100/min, 1000/hora
+- **CORS**: Configurado para todos os origins
+- **Headers**: X-Gateway, X-Service adicionados
 
 ### RabbitMQ
-- `GET /api/rabbitmq/status/` - Status da conexão
-- `POST /api/rabbitmq/test_connection/` - Testar conexão
+- **Host**: localhost:5672
+- **Management**: localhost:15672
+- **Credentials**: guest/guest
 
-## Tecnologias Utilizadas
+### Banco de Dados
+- **SQLite**: Desenvolvimento
+- **Migrações**: Automáticas
 
-- **Angular 17**: Frontend framework
-- **Django 4.2**: Backend framework
-- **Django REST Framework**: API REST
-- **Kong Gateway**: API Gateway
-- **RabbitMQ**: Message broker
-- **Pika**: Cliente Python para RabbitMQ
+## 🎯 Casos de Uso
+
+### 1. Chat em Tempo Real
+1. Usuário faz login via REST
+2. Entra em uma sala de chat
+3. Envia mensagem via REST
+4. Mensagem é publicada no RabbitMQ
+5. Outros usuários recebem via WebSocket
+
+### 2. Compartilhamento de Arquivos
+1. Usuário usa cliente SOAP Node.js
+2. Faz upload de arquivo via SOAP
+3. Arquivo é salvo no servidor
+4. Notificação é enviada via RabbitMQ
+5. Chat mostra arquivo compartilhado
+
+### 3. Sistema de Notificações
+1. Eventos geram notificações
+2. API REST gerencia notificações
+3. HATEOAS fornece links relacionados
+4. Frontend consome via Gateway
+
+## 🔒 Segurança
+
+- **Kong Gateway**: Rate limiting e validação
+- **CORS**: Configurado adequadamente
+- **Headers**: Sanitização automática
+- **Middleware**: Logging e monitoramento
+
+## 📈 Monitoramento
+
+- **Logs**: Django logging configurado
+- **RabbitMQ**: Interface de management
+- **Kong**: Métricas de gateway
+- **Swagger**: Documentação em tempo real
+
+## 🤝 Contribuição
+
+1. Fork o projeto
+2. Crie uma branch para sua feature
+3. Commit suas mudanças
+4. Push para a branch
+5. Abra um Pull Request
+
+## 📝 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo LICENSE para detalhes.
+
+---
+
+**Desenvolvido para as disciplinas de Sistemas Distribuídos**
+- ✅ Implementação de MOM com RabbitMQ
+- ✅ Integração REST/SOAP com API Gateway
+- ✅ HATEOAS e documentação completa
+- ✅ Arquitetura distribuída e escalável

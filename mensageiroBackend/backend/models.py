@@ -75,3 +75,37 @@ class RabbitMQConnection(models.Model):
 
     def __str__(self):
         return f"{self.host}:{self.port}"
+
+class Notification(models.Model):
+    NOTIFICATION_TYPES = [
+        ('message', 'Nova Mensagem'),
+        ('file_upload', 'Arquivo Enviado'),
+        ('user_join', 'Usuário Entrou'),
+        ('user_leave', 'Usuário Saiu'),
+        ('system', 'Sistema'),
+    ]
+    
+    PRIORITY_LEVELS = [
+        ('low', 'Baixa'),
+        ('medium', 'Média'),
+        ('high', 'Alta'),
+        ('urgent', 'Urgente'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=models.UUIDField().default)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, null=True, blank=True)
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    priority = models.CharField(max_length=10, choices=PRIORITY_LEVELS, default='medium')
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    data = models.JSONField(default=dict, blank=True)  # Dados extras
+    
+    class Meta:
+        ordering = ['-created_at']
+        db_table = 'notifications'
+    
+    def __str__(self):
+        return f"{self.title} - {self.user.username}"

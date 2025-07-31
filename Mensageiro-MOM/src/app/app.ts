@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChatComponent } from './components/chat/chat.component';
 import { LoginComponent } from './components/login/login.component';
-import { ChatService, User } from './services/chat.service';
+import { ChatService, type User } from './services/chat.service';
 
 @Component({
   selector: 'app-root',
