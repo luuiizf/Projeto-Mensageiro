@@ -23,6 +23,7 @@ class MensageiroSOAPClient {
       return true
     } catch (error) {
       console.error("❌ Erro ao conectar:", error.message)
+      console.log("💡 Verifique se o servidor SOAP está rodando em http://localhost:8002")
       return false
     }
   }
@@ -35,6 +36,7 @@ class MensageiroSOAPClient {
 
       const fileData = fs.readFileSync(filePath)
       const filename = path.basename(filePath)
+      const fileDataBase64 = fileData.toString("base64")
 
       console.log(`📤 Enviando arquivo: ${filename}`)
       console.log(`👤 Usuário: ${username}`)
@@ -46,22 +48,26 @@ class MensageiroSOAPClient {
         username: username,
         room_name: roomName,
         filename: filename,
-        file_data: fileData,
+        file_data: fileDataBase64,
         description: description,
       })
 
-      if (result[0].success) {
+      if (result[0] && result[0].response && result[0].response.success) {
         console.log("✅ Upload realizado com sucesso!")
-        console.log("📄 Informações do arquivo:")
-        console.log(`   ID: ${result[0].file_info.file_id}`)
-        console.log(`   Nome: ${result[0].file_info.filename}`)
-        console.log(`   Tamanho: ${result[0].file_info.file_size} bytes`)
-        console.log(`   Data: ${result[0].file_info.upload_date}`)
-        console.log(`   Usuário: ${result[0].file_info.uploader_username}`)
-        console.log(`   Sala: ${result[0].file_info.room_name}`)
-        return result[0].file_info
+        const fileInfo = result[0].response.file_info
+        if (fileInfo) {
+          console.log("📄 Informações do arquivo:")
+          console.log(`   ID: ${fileInfo.file_id}`)
+          console.log(`   Nome: ${fileInfo.filename}`)
+          console.log(`   Tamanho: ${fileInfo.file_size} bytes`)
+          console.log(`   Data: ${fileInfo.upload_date}`)
+          console.log(`   Usuário: ${fileInfo.uploader_username}`)
+          console.log(`   Sala: ${fileInfo.room_name}`)
+        }
+        return fileInfo
       } else {
-        console.error("❌ Erro no upload:", result[0].message)
+        const message = result[0]?.response?.message || "Erro desconhecido"
+        console.error("❌ Erro no upload:", message)
         return null
       }
     } catch (error) {
@@ -78,13 +84,14 @@ class MensageiroSOAPClient {
         file_id: fileId,
       })
 
-      if (result[0]) {
-        fs.writeFileSync(outputPath, result[0])
+      if (result[0] && result[0].file_data) {
+        const fileData = Buffer.from(result[0].file_data, "base64")
+        fs.writeFileSync(outputPath, fileData)
         console.log(`✅ Arquivo baixado com sucesso: ${outputPath}`)
-        console.log(`📊 Tamanho: ${result[0].length} bytes`)
+        console.log(`📊 Tamanho: ${fileData.length} bytes`)
         return true
       } else {
-        console.error("❌ Arquivo não encontrado")
+        console.error("❌ Arquivo não encontrado ou erro no download")
         return false
       }
     } catch (error) {
@@ -101,9 +108,11 @@ class MensageiroSOAPClient {
         room_name: roomName,
       })
 
-      if (result[0] && result[0].length > 0) {
-        console.log(`✅ Encontrados ${result[0].length} arquivo(s):`)
-        result[0].forEach((file, index) => {
+      if (result[0] && result[0].files) {
+        const files = Array.isArray(result[0].files) ? result[0].files : [result[0].files]
+        console.log(`✅ Encontrados ${files.length} arquivo(s):`)
+
+        files.forEach((file, index) => {
           console.log(`\n📄 Arquivo ${index + 1}:`)
           console.log(`   ID: ${file.file_id}`)
           console.log(`   Nome: ${file.filename}`)
@@ -111,7 +120,7 @@ class MensageiroSOAPClient {
           console.log(`   Data: ${file.upload_date}`)
           console.log(`   Sala: ${file.room_name}`)
         })
-        return result[0]
+        return files
       } else {
         console.log("📭 Nenhum arquivo encontrado nesta sala")
         return []
@@ -127,8 +136,9 @@ class MensageiroSOAPClient {
     console.log("1. 📤 Upload de arquivo")
     console.log("2. 📥 Download de arquivo")
     console.log("3. 📋 Listar arquivos de uma sala")
-    console.log("4. 🔍 Mostrar WSDL")
-    console.log("5. ❌ Sair")
+    console.log("4. 🔍 Mostrar informações do WSDL")
+    console.log("5. 🧪 Testar conexão")
+    console.log("6. ❌ Sair")
     console.log("================================")
   }
 
@@ -143,40 +153,59 @@ class MensageiroSOAPClient {
       console.log("\n📋 === INFORMAÇÕES DO WSDL ===")
       console.log(`🔗 URL: ${SOAP_URL}`)
 
-      const description = this.client.describe()
-      console.log("\n🏷️  Principais Tags do WSDL:")
-      console.log("   • <definitions>: Define o namespace e importações")
-      console.log("   • <types>: Define os tipos de dados complexos")
-      console.log("   • <message>: Define as mensagens de entrada e saída")
-      console.log("   • <portType>: Define as operações disponíveis")
-      console.log("   • <binding>: Define como as mensagens são transmitidas")
-      console.log("   • <service>: Define os endpoints do serviço")
+      if (this.client) {
+        const description = this.client.describe()
+        console.log("\n🏷️  Principais Tags do WSDL:")
+        console.log("   • <definitions>: Define o namespace e importações")
+        console.log("   • <types>: Define os tipos de dados complexos")
+        console.log("   • <message>: Define as mensagens de entrada e saída")
+        console.log("   • <portType>: Define as operações disponíveis")
+        console.log("   • <binding>: Define como as mensagens são transmitidas")
+        console.log("   • <service>: Define os endpoints do serviço")
 
-      console.log("\n🔧 Operações disponíveis:")
-      Object.keys(description).forEach((serviceName) => {
-        Object.keys(description[serviceName]).forEach((portName) => {
-          Object.keys(description[serviceName][portName]).forEach((operation) => {
-            console.log(`   • ${operation}: ${this.getOperationDescription(operation)}`)
+        console.log("\n🔧 Operações disponíveis:")
+        Object.keys(description).forEach((serviceName) => {
+          Object.keys(description[serviceName]).forEach((portName) => {
+            Object.keys(description[serviceName][portName]).forEach((operation) => {
+              console.log(`   • ${operation}: ${this.getOperationDescription(operation)}`)
+            })
           })
         })
-      })
 
-      console.log("\n📊 Estrutura do Cliente SOAP:")
-      console.log("   • Linguagem: Node.js")
-      console.log("   • Biblioteca: soap (npm)")
-      console.log("   • Protocolo: SOAP 1.1")
-      console.log("   • Transporte: HTTP")
-      console.log("   • Formato: XML")
+        console.log("\n📊 Estrutura do Cliente SOAP:")
+        console.log("   • Linguagem: Node.js")
+        console.log("   • Biblioteca: soap (npm)")
+        console.log("   • Protocolo: SOAP 1.1")
+        console.log("   • Transporte: HTTP")
+        console.log("   • Formato: XML")
 
-      console.log("\n🔄 Como o cliente utiliza o WSDL:")
-      console.log("   1. Faz requisição GET para obter o WSDL")
-      console.log("   2. Parseia o XML para extrair operações e tipos")
-      console.log("   3. Cria métodos JavaScript para cada operação")
-      console.log("   4. Serializa parâmetros para XML SOAP")
-      console.log("   5. Envia requisição POST com envelope SOAP")
-      console.log("   6. Deserializa resposta XML para objeto JavaScript")
+        console.log("\n🔄 Como o cliente utiliza o WSDL:")
+        console.log("   1. Faz requisição GET para obter o WSDL")
+        console.log("   2. Parseia o XML para extrair operações e tipos")
+        console.log("   3. Cria métodos JavaScript para cada operação")
+        console.log("   4. Serializa parâmetros para XML SOAP")
+        console.log("   5. Envia requisição POST com envelope SOAP")
+        console.log("   6. Deserializa resposta XML para objeto JavaScript")
+      } else {
+        console.log("❌ Cliente não conectado. Conecte-se primeiro.")
+      }
     } catch (error) {
       console.error("❌ Erro ao mostrar WSDL:", error.message)
+    }
+  }
+
+  async testConnection() {
+    console.log("\n🧪 === TESTE DE CONEXÃO ===")
+    const connected = await this.connect()
+    if (connected) {
+      console.log("✅ Conexão estabelecida com sucesso!")
+      console.log("🔧 Serviço SOAP está funcionando corretamente")
+    } else {
+      console.log("❌ Falha na conexão")
+      console.log("💡 Verifique se:")
+      console.log("   • O servidor SOAP está rodando")
+      console.log("   • A porta 8001 está disponível")
+      console.log("   • Não há firewall bloqueando a conexão")
     }
   }
 
@@ -195,6 +224,7 @@ class MensageiroSOAPClient {
     const connected = await this.connect()
     if (!connected) {
       console.log("❌ Não foi possível conectar ao serviço SOAP")
+      console.log("💡 Execute 'npm install' para instalar as dependências")
       this.rl.close()
       return
     }
@@ -228,6 +258,10 @@ class MensageiroSOAPClient {
           break
 
         case "5":
+          await this.testConnection()
+          break
+
+        case "6":
           console.log("👋 Encerrando cliente SOAP...")
           this.rl.close()
           return

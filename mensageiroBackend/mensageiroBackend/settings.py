@@ -175,3 +175,10 @@ LOGGING = {
         },
     },
 }
+
+# RabbitMQ settings
+RABBITMQ_HOST = 'localhost'
+RABBITMQ_PORT = 5672
+RABBITMQ_USER = 'guest'
+RABBITMQ_PASS = 'guest'
+RABBITMQ_VHOST = '/' 
