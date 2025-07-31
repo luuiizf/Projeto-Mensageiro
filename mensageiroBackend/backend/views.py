@@ -21,7 +21,7 @@ from .serializers import (
 
 
 )
-from .rabbitmq_service import get_rabbitmq_service
+from .rabbitmq_service import get_rabbitmq_service, RabbitMQService
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()

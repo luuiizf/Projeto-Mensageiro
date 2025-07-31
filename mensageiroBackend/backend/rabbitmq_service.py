@@ -52,6 +52,32 @@ class RabbitMQService:
             logger.error(f"Erro ao testar conexão: {e}")
             return False
     
+    def get_connection_status(self):
+        """Retorna o status da conexão com RabbitMQ"""
+        try:
+            # Tentar conectar se não estiver conectado
+            if not self.connection or self.connection.is_closed:
+                if self.connect():
+                    return 'connected'
+                else:
+                    return 'disconnected'
+            
+            # Se já estiver conectado, testar se ainda está ativo
+            try:
+                # Fazer uma operação simples para testar a conexão
+                self.channel.queue_declare(queue='health_check', durable=False, auto_delete=True)
+                return 'connected'
+            except Exception as e:
+                logger.warning(f"Conexão perdida, tentando reconectar: {e}")
+                if self.connect():
+                    return 'connected'
+                else:
+                    return 'disconnected'
+                    
+        except Exception as e:
+            logger.error(f"Erro ao verificar status da conexão: {e}")
+            return 'disconnected'
+    
     def publish_message(self, message_data):
         try:
             if not self.connection or self.connection.is_closed:
