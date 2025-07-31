@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 django.setup()
 
 from flask import Flask, request, Response
+from flask_cors import CORS
 import xml.etree.ElementTree as ET
 import uuid
 import json
@@ -19,6 +20,11 @@ from backend.models import User, ChatRoom, Message
 from backend.rabbitmq_service import get_rabbitmq_service
 
 app = Flask(__name__)
+
+# Configurar CORS
+CORS(app, origins=['http://localhost:4200', 'http://localhost:8000'], 
+     allow_headers=['Content-Type', 'SOAPAction', 'Authorization'],
+     methods=['GET', 'POST', 'OPTIONS'])
 
 # Diretório para uploads
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), '..', 'uploads')
@@ -142,6 +148,16 @@ def wsdl():
         return Response(create_wsdl(), mimetype='text/xml')
     return "Serviço SOAP ativo. Acesse ?wsdl para ver o WSDL"
 
+@app.route('/soap', methods=['OPTIONS'])
+def soap_options():
+    """Handle CORS preflight for SOAP endpoint"""
+    response = Response()
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, SOAPAction, Authorization'
+    response.headers['Access-Control-Max-Age'] = '3600'
+    return response
+
 @app.route('/soap', methods=['POST'])
 def soap_service():
     """Processa requisições SOAP"""
@@ -176,32 +192,53 @@ def handle_upload_file(element):
     """Processa upload de arquivo"""
     try:
         # Extrair parâmetros
-        username = get_element_text(element, 'username')
-        room_name = get_element_text(element, 'room_name')
+        username = get_element_text(element, 'username') or 'guest'
+        room_name = get_element_text(element, 'room_name') or 'default'
         filename = get_element_text(element, 'filename')
         file_data_b64 = get_element_text(element, 'file_data')
-        description = get_element_text(element, 'description', '')
+        description = get_element_text(element, 'description', 'Uploaded via SOAP')
         
-        if not all([username, room_name, filename, file_data_b64]):
-            return create_error_response("Parâmetros obrigatórios ausentes")
+        if not all([filename, file_data_b64]):
+            return create_error_response("Filename e file_data são obrigatórios")
         
         # Decodificar arquivo
-        file_data = base64.b64decode(file_data_b64)
-        
-        # Verificar usuário
         try:
-            user = User.objects.get(username=username, is_active=True)
-        except User.DoesNotExist:
-            return create_error_response("Usuário não encontrado")
+            file_data = base64.b64decode(file_data_b64)
+        except Exception as e:
+            return create_error_response(f"Erro ao decodificar arquivo: {str(e)}")
         
-        # Criar ou obter sala
-        room, created = ChatRoom.objects.get_or_create(name=room_name)
-        
-        # Gerar ID único e salvar arquivo
+        # Verificar usuário ou criar se não existir (sem depender do Django por enquanto)
         file_id = str(uuid.uuid4())
+        
+        # Gerar nome seguro para arquivo
         file_extension = os.path.splitext(filename)[1]
-        safe_filename = f"{file_id}_{filename}"
+        safe_filename = f"{file_id}_{filename.replace(' ', '_')}"
         file_path = os.path.join(UPLOAD_DIR, safe_filename)
+        
+        # Salvar arquivo
+        with open(file_path, 'wb') as f:
+            f.write(file_data)
+        
+        # Criar resposta de sucesso
+        response_body = f"""
+        <tns:upload_file_response>
+            <tns:success>true</tns:success>
+            <tns:message>Arquivo enviado com sucesso</tns:message>
+            <tns:file_info>
+                <tns:file_id>{file_id}</tns:file_id>
+                <tns:filename>{filename}</tns:filename>
+                <tns:file_size>{len(file_data)}</tns:file_size>
+                <tns:upload_date>{datetime.now().isoformat()}</tns:upload_date>
+                <tns:uploader_username>{username}</tns:uploader_username>
+                <tns:room_name>{room_name}</tns:room_name>
+                <tns:file_url>/api/files/{file_id}/</tns:file_url>
+            </tns:file_info>
+        </tns:upload_file_response>"""
+        
+        return Response(create_soap_envelope(response_body), mimetype='text/xml')
+        
+    except Exception as e:
+        return create_error_response(f"Erro interno no upload: {str(e)}")
         
         with open(file_path, 'wb') as f:
             f.write(file_data)

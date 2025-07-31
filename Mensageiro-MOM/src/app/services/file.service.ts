@@ -34,14 +34,15 @@ export class FileService {
 
         const soapEnvelope = `
           <?xml version="1.0" encoding="utf-8"?>
-          <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-                         xmlns:tns="http://localhost:8001/soap">
+          <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
             <soap:Body>
-              <tns:upload_file>
-                <tns:filename>${file.name}</tns:filename>
-                <tns:file_data>${base64Data}</tns:file_data>
-                <tns:room_name>${roomName}</tns:room_name>
-              </tns:upload_file>
+              <upload_file>
+                <filename>${file.name}</filename>
+                <file_data>${base64Data}</file_data>
+                <room_name>${roomName}</room_name>
+                <username>guest</username>
+                <description>Uploaded via SOAP</description>
+              </upload_file>
             </soap:Body>
           </soap:Envelope>
         `
