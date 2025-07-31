@@ -9,7 +9,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 django.setup()
 
 from flask import Flask, request, Response
-from flask_cors import CORS
 import xml.etree.ElementTree as ET
 import uuid
 import json
@@ -21,10 +20,14 @@ from backend.rabbitmq_service import get_rabbitmq_service
 
 app = Flask(__name__)
 
-# Configurar CORS
-CORS(app, origins=['http://localhost:4200', 'http://localhost:8000'], 
-     allow_headers=['Content-Type', 'SOAPAction', 'Authorization'],
-     methods=['GET', 'POST', 'OPTIONS'])
+# Adicionar CORS headers a todas as respostas
+@app.after_request
+def after_request(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, SOAPAction, Authorization'
+    response.headers['Access-Control-Max-Age'] = '3600'
+    return response
 
 # Diretório para uploads
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), '..', 'uploads')
@@ -151,112 +154,118 @@ def wsdl():
 @app.route('/soap', methods=['OPTIONS'])
 def soap_options():
     """Handle CORS preflight for SOAP endpoint"""
-    response = Response()
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, SOAPAction, Authorization'
-    response.headers['Access-Control-Max-Age'] = '3600'
-    return response
+    return '', 200
 
 @app.route('/soap', methods=['POST'])
 def soap_service():
     """Processa requisições SOAP"""
     try:
+        print("=== DEBUG: Recebeu requisição SOAP ===")
+        print(f"DEBUG: Content-Type: {request.content_type}")
+        print(f"DEBUG: Tamanho dos dados: {len(request.data) if request.data else 0}")
+        
         # Parse do XML SOAP
         root = ET.fromstring(request.data)
+        print("DEBUG: XML parseado com sucesso")
         
         # Encontrar a operação
         body = root.find('.//{http://schemas.xmlsoap.org/soap/envelope/}Body')
         if body is None:
+            print("DEBUG: Body SOAP não encontrado")
             return create_error_response("Body SOAP não encontrado")
+        
+        print("DEBUG: Body SOAP encontrado")
         
         # Verificar qual operação foi chamada
         for child in body:
             operation = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+            print(f"DEBUG: Operação encontrada: {operation}")
             
             if operation == 'upload_file':
+                print("DEBUG: Chamando handle_upload_file")
                 return handle_upload_file(child)
             elif operation == 'download_file':
+                print("DEBUG: Chamando handle_download_file")
                 return handle_download_file(child)
             elif operation == 'list_files':
+                print("DEBUG: Chamando handle_list_files")
                 return handle_list_files(child)
         
         return create_error_response("Operação não reconhecida")
         
     except ET.ParseError as e:
+        print(f"DEBUG: Erro de parse XML: {e}")
         return create_error_response(f"Erro ao parsear XML: {str(e)}")
     except Exception as e:
+        print(f"DEBUG: Erro geral: {e}")
+        import traceback
+        traceback.print_exc()
         return create_error_response(f"Erro interno: {str(e)}")
 
 def handle_upload_file(element):
     """Processa upload de arquivo"""
     try:
+        print("=== DEBUG: Iniciando handle_upload_file ===")
+        
         # Extrair parâmetros
         username = get_element_text(element, 'username') or 'guest'
         room_name = get_element_text(element, 'room_name') or 'default'
         filename = get_element_text(element, 'filename')
         file_data_b64 = get_element_text(element, 'file_data')
-        description = get_element_text(element, 'description', 'Uploaded via SOAP')
+        description = get_element_text(element, 'description', '')
         
-        if not all([filename, file_data_b64]):
-            return create_error_response("Filename e file_data são obrigatórios")
+        print(f"DEBUG: Parâmetros - username: {username}, room_name: {room_name}, filename: {filename}")
         
-        # Decodificar arquivo
+        if not filename:
+            print("DEBUG: Erro - filename ausente")
+            return create_error_response("Filename é obrigatório")
+        
+        if not file_data_b64:
+            print("DEBUG: Erro - file_data ausente")
+            return create_error_response("File_data é obrigatório")
+        
         try:
+            # Decodificar dados do arquivo
             file_data = base64.b64decode(file_data_b64)
+            print(f"DEBUG: Arquivo decodificado, tamanho: {len(file_data)} bytes")
         except Exception as e:
+            print(f"DEBUG: Erro ao decodificar base64: {e}")
             return create_error_response(f"Erro ao decodificar arquivo: {str(e)}")
         
-        # Verificar usuário ou criar se não existir (sem depender do Django por enquanto)
+        # Gerar ID único para o arquivo
         file_id = str(uuid.uuid4())
         
-        # Gerar nome seguro para arquivo
-        file_extension = os.path.splitext(filename)[1]
-        safe_filename = f"{file_id}_{filename.replace(' ', '_')}"
-        file_path = os.path.join(UPLOAD_DIR, safe_filename)
-        
         # Salvar arquivo
-        with open(file_path, 'wb') as f:
-            f.write(file_data)
-        
-        # Criar resposta de sucesso
-        response_body = f"""
-        <tns:upload_file_response>
-            <tns:success>true</tns:success>
-            <tns:message>Arquivo enviado com sucesso</tns:message>
-            <tns:file_info>
-                <tns:file_id>{file_id}</tns:file_id>
-                <tns:filename>{filename}</tns:filename>
-                <tns:file_size>{len(file_data)}</tns:file_size>
-                <tns:upload_date>{datetime.now().isoformat()}</tns:upload_date>
-                <tns:uploader_username>{username}</tns:uploader_username>
-                <tns:room_name>{room_name}</tns:room_name>
-                <tns:file_url>/api/files/{file_id}/</tns:file_url>
-            </tns:file_info>
-        </tns:upload_file_response>"""
-        
-        return Response(create_soap_envelope(response_body), mimetype='text/xml')
-        
-    except Exception as e:
-        return create_error_response(f"Erro interno no upload: {str(e)}")
+        file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{filename}")
+        print(f"DEBUG: Salvando arquivo em: {file_path}")
         
         with open(file_path, 'wb') as f:
             f.write(file_data)
+        
+        # Buscar ou criar usuário e sala
+        try:
+            user, created = User.objects.get_or_create(username=username)
+            room, created = ChatRoom.objects.get_or_create(name=room_name)
+            print(f"DEBUG: Usuário: {user.username}, Sala: {room.name}")
+        except Exception as e:
+            print(f"DEBUG: Erro ao buscar/criar usuário/sala: {e}")
+            # Continuar mesmo se der erro no banco
         
         # Criar mensagem no chat
-        message_content = f"📎 Arquivo compartilhado: {filename}"
-        if description:
-            message_content += f" - {description}"
-        
-        message = Message.objects.create(
-            room=room,
-            sender=user,
-            content=message_content,
-            message_type='system'
-        )
-        
-        # Publicar no RabbitMQ
         try:
+            message_content = f"📎 Arquivo compartilhado: {filename}"
+            if description:
+                message_content += f" - {description}"
+            
+            message = Message.objects.create(
+                room=room,
+                sender=user,
+                content=message_content,
+                message_type='system'
+            )
+            print(f"DEBUG: Mensagem criada: {message.id}")
+            
+            # Publicar no RabbitMQ
             message_data = {
                 'id': str(message.id),
                 'room_name': room.name,
@@ -274,93 +283,139 @@ def handle_upload_file(element):
             
             rabbitmq_service = get_rabbitmq_service()
             rabbitmq_service.publish_message(message_data)
+            print("DEBUG: Mensagem publicada no RabbitMQ")
+            
         except Exception as e:
-            print(f"Erro ao publicar no RabbitMQ: {e}")
+            print(f"DEBUG: Erro ao criar mensagem/publicar RabbitMQ: {e}")
+            # Continuar mesmo se der erro
         
         # Criar resposta SOAP
-        response_body = f"""
-        <tns:upload_fileResponse xmlns:tns="http://mensageiro.soap.service">
-            <tns:response>
-                <tns:success>true</tns:success>
-                <tns:message>Arquivo enviado com sucesso</tns:message>
-                <tns:file_info>
-                    <tns:file_id>{file_id}</tns:file_id>
-                    <tns:filename>{filename}</tns:filename>
-                    <tns:file_size>{len(file_data)}</tns:file_size>
-                    <tns:upload_date>{datetime.now().isoformat()}</tns:upload_date>
-                    <tns:uploader_username>{username}</tns:uploader_username>
-                    <tns:room_name>{room_name}</tns:room_name>
-                </tns:file_info>
-            </tns:response>
-        </tns:upload_fileResponse>"""
+        response_body = f"""<upload_file_response>
+            <success>true</success>
+            <message>Arquivo enviado com sucesso</message>
+            <file_id>{file_id}</file_id>
+            <filename>{filename}</filename>
+            <file_size>{len(file_data)}</file_size>
+            <upload_date>{datetime.now().isoformat()}</upload_date>
+            <uploader_username>{username}</uploader_username>
+            <room_name>{room_name}</room_name>
+        </upload_file_response>"""
         
-        return Response(create_soap_envelope(response_body), mimetype='text/xml')
+        print("DEBUG: Criando resposta de sucesso")
+        response_xml = create_soap_envelope(response_body)
+        print(f"DEBUG: XML de resposta: {response_xml[:200]}...")
+        return Response(response_xml, mimetype='text/xml')
         
     except Exception as e:
-        return create_error_response(f"Erro no upload: {str(e)}")
+        print(f"DEBUG: Erro geral na função: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_error_response(f"Erro interno no upload: {str(e)}")
 
 def handle_download_file(element):
     """Processa download de arquivo"""
     try:
+        print("=== DEBUG: Iniciando handle_download_file ===")
         file_id = get_element_text(element, 'file_id')
         
+        print(f"DEBUG: Procurando arquivo com ID: {file_id}")
+        
         if not file_id:
+            print("DEBUG: Erro - file_id ausente")
             return create_error_response("ID do arquivo é obrigatório")
         
         # Procurar arquivo
         for filename in os.listdir(UPLOAD_DIR):
             if filename.startswith(file_id):
                 file_path = os.path.join(UPLOAD_DIR, filename)
+                print(f"DEBUG: Arquivo encontrado: {file_path}")
+                
+                # Extrair nome original
+                original_filename = filename.split('_', 1)[1] if '_' in filename else filename
+                
                 with open(file_path, 'rb') as f:
                     file_data = f.read()
                 
+                print(f"DEBUG: Arquivo lido, tamanho: {len(file_data)} bytes")
+                
                 file_data_b64 = base64.b64encode(file_data).decode('utf-8')
+                print(f"DEBUG: Arquivo codificado em base64, tamanho: {len(file_data_b64)} chars")
                 
-                response_body = f"""
-                <tns:download_fileResponse xmlns:tns="http://mensageiro.soap.service">
-                    <tns:file_data>{file_data_b64}</tns:file_data>
-                </tns:download_fileResponse>"""
+                response_body = f"""<download_file_response>
+                    <success>true</success>
+                    <message>Arquivo baixado com sucesso</message>
+                    <file_id>{file_id}</file_id>
+                    <filename>{original_filename}</filename>
+                    <file_size>{len(file_data)}</file_size>
+                    <file_data>{file_data_b64}</file_data>
+                </download_file_response>"""
                 
-                return Response(create_soap_envelope(response_body), mimetype='text/xml')
+                print("DEBUG: Criando resposta de download")
+                response_xml = create_soap_envelope(response_body)
+                return Response(response_xml, mimetype='text/xml')
         
+        print("DEBUG: Arquivo não encontrado")
         return create_error_response("Arquivo não encontrado")
         
     except Exception as e:
+        print(f"DEBUG: Erro no download: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return create_error_response(f"Erro no download: {str(e)}")
 
 def handle_list_files(element):
-    """Lista arquivos de uma sala"""
+    """Lista arquivos de uma sala ou todos os arquivos"""
     try:
-        room_name = get_element_text(element, 'room_name')
+        print("=== DEBUG: Iniciando handle_list_files ===")
+        room_name = get_element_text(element, 'room_name', '')
         
-        if not room_name:
-            return create_error_response("Nome da sala é obrigatório")
+        print(f"DEBUG: Listando arquivos para sala: {room_name if room_name else 'todas'}")
         
         files_xml = ""
+        file_count = 0
         
-        for filename in os.listdir(UPLOAD_DIR):
-            if '_' in filename:
-                file_id, original_name = filename.split('_', 1)
-                file_path = os.path.join(UPLOAD_DIR, filename)
-                file_stat = os.stat(file_path)
-                
-                files_xml += f"""
-                <tns:files>
-                    <tns:file_id>{file_id}</tns:file_id>
-                    <tns:filename>{original_name}</tns:filename>
-                    <tns:file_size>{file_stat.st_size}</tns:file_size>
-                    <tns:upload_date>{datetime.fromtimestamp(file_stat.st_mtime).isoformat()}</tns:upload_date>
-                    <tns:room_name>{room_name}</tns:room_name>
-                </tns:files>"""
+        try:
+            for filename in os.listdir(UPLOAD_DIR):
+                if '_' in filename:
+                    file_id, original_name = filename.split('_', 1)
+                    file_path = os.path.join(UPLOAD_DIR, filename)
+                    file_stat = os.stat(file_path)
+                    
+                    # Se room_name foi especificado, buscar no banco para filtrar
+                    # Por simplicidade, vamos retornar todos os arquivos por enquanto
+                    
+                    files_xml += f"""
+                    <file>
+                        <file_id>{file_id}</file_id>
+                        <filename>{original_name}</filename>
+                        <file_size>{file_stat.st_size}</file_size>
+                        <upload_date>{datetime.fromtimestamp(file_stat.st_mtime).isoformat()}</upload_date>
+                        <room_name>{room_name or 'unknown'}</room_name>
+                    </file>"""
+                    file_count += 1
+        except Exception as e:
+            print(f"DEBUG: Erro ao listar diretório: {e}")
+            files_xml = ""
         
-        response_body = f"""
-        <tns:list_filesResponse xmlns:tns="http://mensageiro.soap.service">
-            {files_xml}
-        </tns:list_filesResponse>"""
+        print(f"DEBUG: Encontrados {file_count} arquivos")
         
-        return Response(create_soap_envelope(response_body), mimetype='text/xml')
+        response_body = f"""<list_files_response>
+            <success>true</success>
+            <message>Arquivos listados com sucesso</message>
+            <file_count>{file_count}</file_count>
+            <files>
+                {files_xml}
+            </files>
+        </list_files_response>"""
+        
+        print("DEBUG: Criando resposta de listagem")
+        response_xml = create_soap_envelope(response_body)
+        return Response(response_xml, mimetype='text/xml')
         
     except Exception as e:
+        print(f"DEBUG: Erro geral na listagem: {e}")
+        import traceback
+        traceback.print_exc()
         return create_error_response(f"Erro ao listar arquivos: {str(e)}")
 
 def get_element_text(parent, tag_name, default=None):

@@ -2,6 +2,7 @@ import { Component, type OnInit, type OnDestroy } from "@angular/core"
 import { CommonModule } from "@angular/common"
 import { FormsModule } from "@angular/forms"
 import { ChatService, type Message, type ChatRoom, type SendMessageRequest, type User, type RoomsResponse, type MessagesResponse } from "../../services/chat.service"
+import { FileService } from "../../services/file.service"
 import { KongStatusComponent } from "../kong-status/kong-status.component"
 import { FileManagerComponent } from "../file-manager/file-manager.component"
 import { NotificationsComponent } from "../notifications/notifications.component"
@@ -98,7 +99,12 @@ import { Subscription, interval } from "rxjs"
                   <span class="sender">{{ message.sender_username }}</span>
                   <span class="timestamp">{{ formatTimestamp(message.timestamp) }}</span>
                 </div>
-                <div class="message-text">{{ message.content }}</div>
+                <div class="message-text"
+                     [class.file-message]="isFileMessage(message.content)"
+                     (click)="isFileMessage(message.content) ? downloadFileFromMessage(message.content) : null">
+                  {{ message.content }}
+                  <span *ngIf="isFileMessage(message.content)" class="download-hint">👈 Clique para baixar</span>
+                </div>
               </div>
             </div>
           </div>
@@ -121,7 +127,7 @@ import { Subscription, interval } from "rxjs"
 
           <!-- File Manager Panel -->
           <div class="file-panel" *ngIf="showFileManager">
-            <app-file-manager [currentRoom]="currentRoom"></app-file-manager>
+            <app-file-manager [currentRoom]="currentRoom" (closeRequested)="closeFileManager()"></app-file-manager>
           </div>
         </div>
 
@@ -604,6 +610,31 @@ import { Subscription, interval } from "rxjs"
       word-wrap: break-word;
     }
 
+    .file-message {
+      cursor: pointer;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 8px;
+      padding: 0.75rem;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .file-message:hover {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(168, 85, 247, 0.1) 100%);
+      border-color: rgba(139, 92, 246, 0.4);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+    }
+
+    .download-hint {
+      font-size: 0.75rem;
+      color: #8B5CF6;
+      opacity: 0.8;
+      margin-left: 0.5rem;
+      font-style: italic;
+    }
+
     .message-input-area {
       padding: 1.5rem;
       background: white;
@@ -785,7 +816,10 @@ export class ChatComponent implements OnInit, OnDestroy {
   private subscription = new Subscription()
   private pollInterval = interval(2000)
 
-  constructor(private chatService: ChatService) {}
+  constructor(
+    private chatService: ChatService,
+    private fileService: FileService
+  ) {}
 
   ngOnInit(): void {
     this.currentUser = this.chatService.getCurrentUser()
@@ -878,6 +912,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.showFileManager = !this.showFileManager
   }
 
+  closeFileManager(): void {
+    this.showFileManager = false
+  }
+
   checkConnection(): void {
     this.subscription.add(
       this.chatService.getRabbitMQStatus().subscribe({
@@ -903,6 +941,80 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.checkConnection()
       }),
     )
+  }
+
+  isFileMessage(content: string): boolean {
+    return content.includes("📎 Arquivo compartilhado:")
+  }
+
+  downloadFileFromMessage(content: string): void {
+    console.log('DEBUG: Tentando fazer download da mensagem:', content)
+
+    // Extrair o nome do arquivo da mensagem
+    const fileMatch = content.match(/📎 Arquivo compartilhado: (.+?)(?:\s-|$)/)
+    if (!fileMatch) {
+      console.error('Não foi possível extrair o nome do arquivo da mensagem')
+      alert('Não foi possível identificar o arquivo para download')
+      return
+    }
+
+    const filename = fileMatch[1]
+    console.log('DEBUG: Nome do arquivo extraído:', filename)
+
+    // Por simplicidade, vamos tentar buscar o arquivo pelo nome
+    // Em uma implementação mais robusta, deveríamos armazenar o file_id na mensagem
+    this.downloadFileByName(filename)
+  }
+
+  downloadFileByName(filename: string): void {
+    console.log('DEBUG: Procurando arquivo para download:', filename)
+
+    // Implementação temporária: usar listFiles para encontrar o arquivo
+    this.fileService.listFiles().subscribe({
+      next: (files) => {
+        console.log('DEBUG: Arquivos disponíveis:', files)
+        const file = files.find(f => f.filename === filename)
+
+        if (!file) {
+          console.error('Arquivo não encontrado na lista')
+          alert(`Arquivo "${filename}" não encontrado`)
+          return
+        }
+
+        console.log('DEBUG: Arquivo encontrado, iniciando download:', file)
+        this.downloadFile(file.file_id, filename)
+      },
+      error: (error) => {
+        console.error('Erro ao listar arquivos:', error)
+        alert('Erro ao buscar arquivos disponíveis')
+      }
+    })
+  }
+
+  downloadFile(fileId: string, filename: string): void {
+    console.log('DEBUG: Fazendo download do arquivo:', fileId, filename)
+
+    this.fileService.downloadFile(fileId).subscribe({
+      next: (result) => {
+        console.log('DEBUG: Download concluído:', result)
+
+        // Criar link para download
+        const url = window.URL.createObjectURL(result.blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = result.filename || filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+
+        console.log('DEBUG: Arquivo baixado com sucesso:', result.filename)
+      },
+      error: (error) => {
+        console.error('Erro no download:', error)
+        alert(`Erro ao baixar arquivo: ${error.message || 'Erro desconhecido'}`)
+      }
+    })
   }
 
   formatTimestamp(timestamp: string): string {

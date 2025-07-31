@@ -1,4 +1,4 @@
-import { Component, type OnInit, Input } from "@angular/core"
+import { Component, type OnInit, Input, Output, EventEmitter } from "@angular/core"
 import { CommonModule } from "@angular/common"
 import { FormsModule } from "@angular/forms"
 import { FileService, FileInfo } from "../../services/file.service"
@@ -15,9 +15,14 @@ import { ChatService } from "../../services/chat.service"
           <div class="file-icon">📁</div>
           <h3>Compartilhar Arquivos</h3>
         </div>
-        <button (click)="refreshFiles()" [disabled]="loading" class="refresh-btn">
-          <span class="refresh-icon" [class.spinning]="loading">🔄</span>
-        </button>
+        <div class="header-actions">
+          <button (click)="refreshFiles()" [disabled]="loading" class="refresh-btn">
+            <span class="refresh-icon" [class.spinning]="loading">🔄</span>
+          </button>
+          <button (click)="closeFileManager()" class="close-btn">
+            <span>✖️</span>
+          </button>
+        </div>
       </div>
 
       <!-- Upload Section -->
@@ -152,7 +157,13 @@ import { ChatService } from "../../services/chat.service"
       font-weight: 600;
     }
 
-    .refresh-btn {
+    .header-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .refresh-btn, .close-btn {
       width: 32px;
       height: 32px;
       background: rgba(139, 92, 246, 0.2);
@@ -165,9 +176,14 @@ import { ChatService } from "../../services/chat.service"
       transition: all 0.3s ease;
     }
 
-    .refresh-btn:hover:not(:disabled) {
+    .refresh-btn:hover:not(:disabled), .close-btn:hover {
       background: rgba(139, 92, 246, 0.3);
       transform: scale(1.05);
+    }
+
+    .close-btn:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.3);
     }
 
     .refresh-icon.spinning {
@@ -429,6 +445,7 @@ import { ChatService } from "../../services/chat.service"
 })
 export class FileManagerComponent implements OnInit {
   @Input() currentRoom: any = null
+  @Output() closeRequested = new EventEmitter<void>()
 
   files: FileInfo[] = []
   loading = false
@@ -463,6 +480,10 @@ export class FileManagerComponent implements OnInit {
 
   refreshFiles(): void {
     this.loadFiles()
+  }
+
+  closeFileManager(): void {
+    this.closeRequested.emit()
   }
 
   onDragOver(event: DragEvent): void {
@@ -519,7 +540,17 @@ export class FileManagerComponent implements OnInit {
         error: (error) => {
           console.error("Erro no upload:", error)
           this.uploadingFiles = this.uploadingFiles.filter((u) => u !== uploadProgress)
-          alert(`Erro ao enviar ${file.name}: ${error.message}`)
+
+          let errorMessage = `Erro ao enviar ${file.name}`
+          if (error.status === 500) {
+            errorMessage += ': Erro interno do servidor. Verifique se o arquivo está corrompido.'
+          } else if (error.status === 0) {
+            errorMessage += ': Não foi possível conectar ao servidor SOAP.'
+          } else {
+            errorMessage += `: ${error.message || 'Erro desconhecido'}`
+          }
+
+          alert(errorMessage)
         },
       })
 
@@ -536,8 +567,8 @@ export class FileManagerComponent implements OnInit {
 
   downloadFile(file: FileInfo): void {
     this.fileService.downloadFile(file.file_id).subscribe({
-      next: (blob) => {
-        const url = window.URL.createObjectURL(blob)
+      next: (result) => {
+        const url = window.URL.createObjectURL(result.blob)
         const a = document.createElement("a")
         a.href = url
         a.download = file.filename
