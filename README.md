@@ -23,7 +23,7 @@ Sistema completo de mensagens que integra **REST**, **SOAP**, **API Gateway** e 
 
 ## 🏗️ Arquitetura
 
-\`\`\`
+```
 ┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
 │   Frontend      │    │     Kong     │    │   Backend       │
 │   Angular       │◄──►│   Gateway    │◄──►│   Django REST   │
@@ -39,7 +39,7 @@ Sistema completo de mensagens que integra **REST**, **SOAP**, **API Gateway** e 
                               ▼
                        ┌─────────────────┐
                        │  SOAP Service   │
-                       │ Python/Spyne    │
+                       │ Python/Flask    │
                        │  (Port 8001)    │
                        └─────────────────┘
                               ▲
@@ -48,7 +48,7 @@ Sistema completo de mensagens que integra **REST**, **SOAP**, **API Gateway** e 
                        │  SOAP Client    │
                        │    Node.js      │
                        └─────────────────┘
-\`\`\`
+```
 
 ## 🛠️ Tecnologias
 
