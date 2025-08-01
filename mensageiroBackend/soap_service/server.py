@@ -15,7 +15,7 @@ import json
 import pika
 from datetime import datetime
 import base64
-from backend.models import User, ChatRoom, Message
+from backend.models import User, ChatRoom, Message, Notification
 from backend.rabbitmq_service import get_rabbitmq_service
 
 app = Flask(__name__)
@@ -284,6 +284,29 @@ def handle_upload_file(element):
             rabbitmq_service = get_rabbitmq_service()
             rabbitmq_service.publish_message(message_data)
             print("DEBUG: Mensagem publicada no RabbitMQ")
+            
+            # Criar notificações para outros usuários na sala
+            try:
+                other_users = User.objects.exclude(id=user.id)
+                for other_user in other_users:
+                    Notification.objects.create(
+                        user=other_user,
+                        room=room,
+                        notification_type='file_upload',
+                        title=f'Arquivo compartilhado em #{room.name}',
+                        message=f'{user.username} compartilhou: {filename}',
+                        priority='medium',
+                        data={
+                            'file_id': file_id,
+                            'filename': filename,
+                            'file_size': str(len(file_data)),
+                            'uploader_id': str(user.id),
+                            'uploader_username': user.username
+                        }
+                    )
+                print(f"DEBUG: Criadas {other_users.count()} notificações de arquivo")
+            except Exception as notif_error:
+                print(f"DEBUG: Erro ao criar notificações: {notif_error}")
             
         except Exception as e:
             print(f"DEBUG: Erro ao criar mensagem/publicar RabbitMQ: {e}")

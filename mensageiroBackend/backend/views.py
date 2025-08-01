@@ -625,6 +625,8 @@ def send_message(request):
         })
         
         # Criar notificações para outros usuários na sala
+        # Para um sistema real, você teria uma tabela de membros da sala
+        # Por ora, vamos notificar todos os outros usuários
         other_users = User.objects.exclude(id=sender.id)
         for user in other_users:
             Notification.objects.create(
@@ -632,9 +634,13 @@ def send_message(request):
                 room=room,
                 notification_type='message',
                 title=f'Nova mensagem em #{room.name}',
-                message=f'{sender.username}: {message.content[:50]}...',
+                message=f'{sender.username}: {message.content[:50]}{"..." if len(message.content) > 50 else ""}',
                 priority='medium',
-                data={'message_id': str(message.id)}
+                data={
+                    'message_id': str(message.id),
+                    'sender_id': str(sender.id),
+                    'sender_username': sender.username
+                }
             )
         
         serializer = MessageSerializer(message)
@@ -699,37 +705,49 @@ def download_file(request, file_id):
 
 @api_view(['GET'])
 def kong_status(request):
-    """Status do Kong Gateway"""
-    import requests
+    return Response({
+        'status': 'connected',
+        'gateway': 'Kong',
+        'service': 'Chat-API',
+        'timestamp': timezone.now().isoformat(),
+        'headers': {
+            'X-Gateway': request.META.get('HTTP_X_GATEWAY', 'Not Set'),
+            'X-Service': request.META.get('HTTP_X_SERVICE', 'Not Set'),
+            'X-Request-ID': request.META.get('HTTP_X_REQUEST_ID', 'Not Set'),
+        }
+    })
+# def kong_status(request):
+#     """Status do Kong Gateway"""
+#     import requests
     
-    try:
-        # Verificar Kong Admin API
-        response = requests.get('http://localhost:8001/', timeout=5)
+#     try:
+#         # Verificar Kong Admin API
+#         response = requests.get('http://localhost:8001/', timeout=5)
         
-        return Response({
-            'gateway': 'Kong',
-            'service': 'Mensageiro MOM',
-            'status': 'connected' if response.status_code == 200 else 'disconnected',
-            'timestamp': timezone.now().isoformat(),
-            'headers': dict(response.headers),
-            '_links': {
-                'self': {'href': '/api/kong/status/'},
-                'admin': {'href': 'http://localhost:8001/'},
-                'gateway': {'href': 'http://localhost:8000/'}
-            }
-        })
+#         return Response({
+#             'gateway': 'Kong',
+#             'service': 'Mensageiro MOM',
+#             'status': 'connected' if response.status_code == 200 else 'disconnected',
+#             'timestamp': timezone.now().isoformat(),
+#             'headers': dict(response.headers),
+#             '_links': {
+#                 'self': {'href': '/api/kong/status/'},
+#                 'admin': {'href': 'http://localhost:8001/'},
+#                 'gateway': {'href': 'http://localhost:8000/'}
+#             }
+#         })
         
-    except Exception as e:
-        return Response({
-            'gateway': 'Kong',
-            'service': 'Mensageiro MOM',
-            'status': 'disconnected',
-            'error': str(e),
-            'timestamp': timezone.now().isoformat(),
-            '_links': {
-                'self': {'href': '/api/kong/status/'}
-            }
-        })
+#     except Exception as e:
+#         return Response({
+#             'gateway': 'Kong',
+#             'service': 'Mensageiro MOM',
+#             'status': 'disconnected',
+#             'error': str(e),
+#             'timestamp': timezone.now().isoformat(),
+#             '_links': {
+#                 'self': {'href': '/api/kong/status/'}
+#             }
+#         })
 
 @api_view(['GET'])
 def api_root(request):
@@ -917,7 +935,6 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def mark_as_read(self, request, pk=None):
         notification = self.get_object()
         notification.is_read = True
-        notification.read_at = timezone.now()
         notification.save()
         
         response_data = NotificationSerializer(notification).data
@@ -941,7 +958,6 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def mark_as_unread(self, request, pk=None):
         notification = self.get_object()
         notification.is_read = False
-        notification.read_at = None
         notification.save()
         
         response_data = NotificationSerializer(notification).data
@@ -959,21 +975,6 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return Response({
             'message': 'Notificação marcada como não lida',
             'data': response_data
-        })
-    
-    @action(detail=True, methods=['post'])
-    def mark_read(self, request, pk=None):
-        """Marcar notificação como lida"""
-        notification = get_object_or_404(Notification, pk=pk)
-        notification.is_read = True
-        notification.save()
-        
-        return Response({
-            'message': 'Notificação marcada como lida',
-            '_links': {
-                'self': {'href': f'/api/notifications/{pk}/'},
-                'list': {'href': '/api/notifications/'}
-            }
         })
     
     @action(detail=False, methods=['post'])

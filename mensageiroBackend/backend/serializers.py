@@ -96,3 +96,18 @@ class NotificationSerializer(serializers.ModelSerializer):
             'is_read', 'created_at', 'data'
         ]
         read_only_fields = ['id', 'created_at']
+
+class CreateNotificationSerializer(serializers.ModelSerializer):
+    """Serializer para criar notificações"""
+    
+    class Meta:
+        model = Notification
+        fields = [
+            'user', 'room', 'notification_type', 'title', 
+            'message', 'priority', 'data'
+        ]
+    
+    def validate_user(self, value):
+        if not User.objects.filter(id=value.id, is_active=True).exists():
+            raise serializers.ValidationError("Usuário não encontrado ou inativo.")
+        return value

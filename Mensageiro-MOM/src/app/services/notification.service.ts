@@ -38,11 +38,11 @@ export class NotificationService {
   }
 
   markAsRead(notificationId: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/api/notifications/${notificationId}/mark_read/`, {})
+    return this.http.post(`${this.apiUrl}/api/notifications/${notificationId}/mark_as_read/`, {})
   }
 
   markAllAsRead(userId: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/api/notifications/mark_all_read/`, { user_id: userId })
+    return this.http.post(`${this.apiUrl}/api/notifications/mark_all_as_read/`, { user_id: userId })
   }
 
   deleteNotification(notificationId: string): Observable<any> {
