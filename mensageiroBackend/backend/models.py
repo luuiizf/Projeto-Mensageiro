@@ -92,7 +92,7 @@ class Notification(models.Model):
         ('urgent', 'Urgente'),
     ]
     
-    id = models.UUIDField(primary_key=True, default=models.UUIDField().default)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, null=True, blank=True)
     notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)

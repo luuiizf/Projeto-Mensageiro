@@ -17,9 +17,8 @@ import uuid
 from .models import ChatRoom, Message, RabbitMQConnection, User, Notification
 from .serializers import (
     ChatRoomSerializer, MessageSerializer, RabbitMQConnectionSerializer,
-    SendMessageSerializer, UserSerializer, UserRegistrationSerializer, UserLoginSerializer, NotificationSerializer
-
-
+    SendMessageSerializer, UserSerializer, UserRegistrationSerializer, UserLoginSerializer, NotificationSerializer,
+    CreateNotificationSerializer
 )
 from .rabbitmq_service import get_rabbitmq_service, RabbitMQService
 
@@ -881,7 +880,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         for item in serializer.data:
             item['_links'] = {
                 'self': {'href': f"/api/notifications/{item['id']}/"},
-                'mark_read': {'href': f"/api/notifications/{item['id']}/mark_read/"},
+                'mark_as_read': {'href': f"/api/notifications/{item['id']}/mark_as_read/"},
                 'delete': {'href': f"/api/notifications/{item['id']}/"}
             }
         
